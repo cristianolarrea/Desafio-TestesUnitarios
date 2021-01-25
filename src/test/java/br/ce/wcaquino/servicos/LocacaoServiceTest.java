@@ -3,15 +3,17 @@ package br.ce.wcaquino.servicos;
 import br.ce.wcaquino.entidades.Filme;
 import br.ce.wcaquino.entidades.Locacao;
 import br.ce.wcaquino.entidades.Usuario;
+import br.ce.wcaquino.utils.DataUtils;
 import exceptions.FilmeSemEstoqueExceptions;
 import exceptions.LocadoraException;
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.*;
 import org.junit.rules.ErrorCollector;
 import org.junit.rules.ExpectedException;
 
+import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 
 import static br.ce.wcaquino.utils.DataUtils.*;
 import static org.hamcrest.CoreMatchers.*;
@@ -19,22 +21,28 @@ import static org.junit.Assert.*;
 
 public class LocacaoServiceTest {
 
+    private LocacaoService service;
+
     @Rule
     public ErrorCollector error = new ErrorCollector();
 
     @Rule
     public ExpectedException exception = ExpectedException.none();
 
+    @Before
+    public void setUp(){
+        service = new LocacaoService();
+    }
 
     @Test
-    public void testeLocacao() throws Exception {
+    public void deveAlugarFilme() throws Exception {
         //cenario
-        LocacaoService service = new LocacaoService();
+        Assume.assumeFalse(DataUtils.verificarDiaSemana(new Date(), Calendar.SATURDAY));
         Usuario usuario = new Usuario("Usuario 1");
-        Filme filme = new Filme("Filme 1", 2, 5.0);
+        List<Filme> filmes = Arrays.asList(new Filme("Filme 1", 2, 5.0));
 
         //açao
-        Locacao locacao = service.alugarFilme(usuario, filme);
+        Locacao locacao = service.alugarFilme(usuario, filmes);
 
         //verificaçao
         error.checkThat(locacao.getValor(), is(5.0));
@@ -44,23 +52,21 @@ public class LocacaoServiceTest {
 
     //Elegante (boa quando garante que a exceção é lançada apenas pelo motivo testado, ñ preciso da mensagem)
     @Test(expected = FilmeSemEstoqueExceptions.class)
-    public void testLocacao_FilmeSemEstoque() throws Exception {
+    public void naoDeveAlugarFilmeSemEstoque() throws Exception {
         //cenario
-        LocacaoService service = new LocacaoService();
         Usuario usuario = new Usuario("Usuario 1");
-        Filme filme = new Filme("Filme 1", 0, 5.0);
+        List<Filme> filmes = Arrays.asList(new Filme("Filme 1", 0, 4.0));
 
         //açao
-        service.alugarFilme(usuario, filme);
+        service.alugarFilme(usuario, filmes);
     }
 
     //Robusta (com try/catch)
     @Test
-    public void testLocacao_usuarioVazio() throws FilmeSemEstoqueExceptions {
-        LocacaoService service = new LocacaoService();
-        Filme filme = new Filme("Filme 2", 2, 4.0);
+    public void naoDeveAlugarFilmeSemUsuario() throws FilmeSemEstoqueExceptions {
+        List<Filme> filmes = Arrays.asList(new Filme("Filme 1", 2, 4.0));
         try {
-            service.alugarFilme(null, filme);
+            service.alugarFilme(null, filmes);
             Assert.fail();
         } catch (LocadoraException e) {
             assertThat(e.getMessage(), is("Usuario vazio"));
@@ -69,12 +75,24 @@ public class LocacaoServiceTest {
 
     //Nova (usa a Rule)
     @Test
-    public void testLocacao_filmeVazio() throws FilmeSemEstoqueExceptions, LocadoraException {
-        LocacaoService service = new LocacaoService();
+    public void naoDeveAlugarFilmeSemFilme() throws FilmeSemEstoqueExceptions, LocadoraException {
         Usuario usuario = new Usuario("Usuario 1");
         exception.expect(LocadoraException.class);
         exception.expectMessage("Filme vazio");
         service.alugarFilme(usuario, null);
+    }
+
+    @Test
+    public void naoDeveDevolverFilmeNoDomingo() throws FilmeSemEstoqueExceptions, LocadoraException {
+        Assume.assumeTrue(DataUtils.verificarDiaSemana(new Date(), Calendar.SATURDAY));
+        Usuario usuario = new Usuario("Usuario 1");
+        List<Filme> filme = Arrays.asList(new Filme("Filme 1", 2, 4.0));
+
+        Locacao retorno = service.alugarFilme(usuario, filme);
+
+        boolean ehSegunda = DataUtils.verificarDiaSemana(retorno.getDataRetorno(), Calendar.MONDAY);
+        Assert.assertTrue(ehSegunda);
+
     }
 }
 
